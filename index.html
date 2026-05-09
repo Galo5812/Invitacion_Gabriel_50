@@ -982,7 +982,7 @@ body::after{
     </div>
   </div>
   <audio id="audioPlayer" loop preload="auto" playsinline webkit-playsinline>
-    <source src="cancion.mp3" type="audio/mpeg"/>
+    <source src="Raton-Vaquero.mp3" type="audio/mpeg"/>
   </audio>
 </section>
 
@@ -1108,8 +1108,7 @@ function closeLB(){document.getElementById('lightbox').classList.remove('open');
 function lbNext(){lbIdx=(lbIdx+1)%photos.length;openLB(lbIdx);}
 function lbPrev(){lbIdx=(lbIdx-1+photos.length)%photos.length;openLB(lbIdx);}
 
-/* ══ AUDIO ══ */
-/* ══ AUDIO — AUTOPLAY AL ABRIR ══ */
+/* ══ AUDIO COMPLETO ══ */
 const audio   = document.getElementById('audioPlayer');
 const vinyl   = document.getElementById('vinyl');
 const playBtn = document.getElementById('playBtn');
@@ -1120,9 +1119,10 @@ const fill    = document.getElementById('progFill');
 const curT    = document.getElementById('curTime');
 const durT    = document.getElementById('durTime');
 let playing   = false;
+let unlocked  = false;
 
-audio.addEventListener('canplay', () => { noAudio.style.display = 'none'; });
-audio.addEventListener('error',   () => { noAudio.style.display = 'block'; });
+audio.addEventListener('canplay',        () => { if(noAudio) noAudio.style.display='none'; });
+audio.addEventListener('error',          () => { if(noAudio) noAudio.style.display='block'; });
 audio.addEventListener('loadedmetadata', () => { durT.textContent = fmt(audio.duration); });
 audio.addEventListener('timeupdate', () => {
   if (!audio.duration) return;
@@ -1133,71 +1133,70 @@ audio.addEventListener('ended', () => setPlay(false));
 
 function fmt(s) {
   if (!s || isNaN(s)) return '0:00';
-  return Math.floor(s / 60) + ':' + (Math.floor(s % 60) < 10 ? '0' : '') + Math.floor(s % 60);
+  return Math.floor(s/60) + ':' + (Math.floor(s%60)<10?'0':'') + Math.floor(s%60);
+}
+
+function fadeInVolume() {
+  audio.volume = 0;
+  let v = 0;
+  const t = setInterval(() => {
+    v = Math.min(parseFloat((v+0.05).toFixed(2)), 1);
+    audio.volume = v;
+    if (v >= 1) clearInterval(t);
+  }, 80);
 }
 
 function setPlay(s) {
   playing = s;
-  playBtn.textContent = s ? '⏸' : '▶';
-  playIco.textContent = s ? '⏸' : '▶';
-  s ? vinyl.classList.add('spinning')    : vinyl.classList.remove('spinning');
-  s ? eq.classList.remove('paused')      : eq.classList.add('paused');
+  if(playBtn) playBtn.textContent = s ? '⏸' : '▶';
+  if(playIco) playIco.textContent = s ? '⏸' : '▶';
+  s ? vinyl.classList.add('spinning')  : vinyl.classList.remove('spinning');
+  s ? eq.classList.remove('paused')    : eq.classList.add('paused');
 }
 
 function togglePlay() {
-  if (audio.readyState === 0) { noAudio.style.display = 'block'; return; }
-  playing
-    ? (audio.pause(), setPlay(false))
-    : audio.play().then(() => setPlay(true)).catch(() => { noAudio.style.display = 'block'; });
+  if (!playing) {
+    audio.play().then(() => { setPlay(true); }).catch(()=>{});
+  } else {
+    audio.pause();
+    setPlay(false);
+  }
 }
 
-function skipBack() { audio.currentTime = Math.max(0, audio.currentTime - 10); }
-function skipFwd()  { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); }
+function skipBack() { audio.currentTime = Math.max(0, audio.currentTime-10); }
+function skipFwd()  { audio.currentTime = Math.min(audio.duration||0, audio.currentTime+10); }
 
 function seekAudio(e) {
   if (!audio.duration) return;
   const r = e.currentTarget.getBoundingClientRect();
-  audio.currentTime = ((e.clientX - r.left) / r.width) * audio.duration;
+  audio.currentTime = ((e.clientX-r.left)/r.width) * audio.duration;
 }
 
-/* ── AUTOPLAY UNIVERSAL iOS + Android ── */
-/* ══ AUDIO UNIVERSAL sin pantalla de bienvenida ══ */
-let audioUnlocked = false;
-
-function fadeInVolume() {
-  audio.volume = 0;
-  let vol = 0;
-  const fade = setInterval(() => {
-    vol = Math.min(parseFloat((vol + 0.05).toFixed(2)), 1);
-    audio.volume = vol;
-    if (vol >= 1) clearInterval(fade);
-  }, 80);
-}
-
-function iniciarAudio() {
-  if (audioUnlocked) return;
+/* ── iOS + Android: arranca en primer toque ── */
+function onPrimerToque() {
+  if (unlocked) return;
+  unlocked = true;
   audio.play().then(() => {
-    audioUnlocked = true;
     setPlay(true);
     fadeInVolume();
-    ['touchstart','touchend','click'].forEach(ev =>
-      document.removeEventListener(ev, iniciarAudio)
-    );
-  }).catch(() => {});
+  }).catch(()=>{});
+  ['touchstart','touchend','click','scroll'].forEach(ev =>
+    document.removeEventListener(ev, onPrimerToque)
+  );
 }
 
+['touchstart','touchend','click','scroll'].forEach(ev =>
+  document.addEventListener(ev, onPrimerToque, { once: true, passive: true })
+);
+
+/* Intento inmediato para Android/Chrome */
 window.addEventListener('load', () => {
-  // Intento inmediato (funciona en Android y algunos navegadores)
+  if (unlocked) return;
   audio.play().then(() => {
-    audioUnlocked = true;
+    unlocked = true;
     setPlay(true);
     fadeInVolume();
-  }).catch(() => {
-    // iOS bloqueó — arranca en el primer toque del usuario
-    ['touchstart', 'touchend', 'click'].forEach(ev =>
-      document.addEventListener(ev, iniciarAudio, { passive: true })
-    );
-  });
+  }).catch(() => {});
 });
 
 /* ══ CONTADOR — 6 JUNIO 2026 3:30 PM ══ */
