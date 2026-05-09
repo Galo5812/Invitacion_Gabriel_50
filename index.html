@@ -1162,96 +1162,111 @@ function seekAudio(e) {
 }
 
 /* ── AUTOPLAY: intenta sonar al cargar ── */
-/* ── AUTOPLAY MEJORADO — funciona en Android ── */
+/* ── AUTOPLAY UNIVERSAL iOS + Android ── */
+let audioUnlocked = false;
+
 function tryAutoplay() {
-  // Android necesita interacción primero — preparamos el audio
   audio.load();
 
-  const tryPlay = () => {
+  // Intento silencioso inmediato
+  audio.muted = true;
+  audio.play().then(() => {
+    audio.muted = false;
     audio.volume = 0;
-    const promise = audio.play();
-    if (promise !== undefined) {
-      promise.then(() => {
+    setPlay(true);
+    fadeInVolume();
+    audioUnlocked = true;
+  }).catch(() => {
+    audio.muted = false;
+    esperarInteraccion();
+  });
+}
+
+function fadeInVolume() {
+  let vol = 0;
+  const fade = setInterval(() => {
+    vol = Math.min(parseFloat((vol + 0.05).toFixed(2)), 1);
+    audio.volume = vol;
+    if (vol >= 1) clearInterval(fade);
+  }, 80);
+}
+
+function esperarInteraccion() {
+  showUnlockBtn();
+
+  const eventos = ['touchend', 'touchstart', 'click', 'pointerup'];
+
+  const unlock = (e) => {
+    if (audioUnlocked) return;
+    // iOS: necesita llamarse directo desde el evento del usuario
+    audio.muted = false;
+    audio.volume = 0;
+    const p = audio.play();
+    if (p !== undefined) {
+      p.then(() => {
+        audioUnlocked = true;
         setPlay(true);
-        // Fade in suave
-        let vol = 0;
-        const fadeIn = setInterval(() => {
-          vol = Math.min(vol + 0.05, 1);
-          audio.volume = vol;
-          if (vol >= 1) clearInterval(fadeIn);
-        }, 100);
-      }).catch(() => {
-        // Bloqueado — muestra botón de activar
-        showUnlockBtn();
-      });
+        fadeInVolume();
+        ocultarUnlockBtn();
+        eventos.forEach(ev => document.removeEventListener(ev, unlock));
+      }).catch(() => {});
     }
   };
 
-  // Intento inmediato
-  tryPlay();
-
-  // Si falla, escucha CUALQUIER interacción del usuario
-  const eventos = ['touchstart','touchend','click','keydown','scroll'];
-  const unlock = () => {
-    audio.load();
-    audio.volume = 0;
-    audio.play().then(() => {
-      setPlay(true);
-      let vol = 0;
-      const fadeIn = setInterval(() => {
-        vol = Math.min(vol + 0.05, 1);
-        audio.volume = vol;
-        if (vol >= 1) clearInterval(fadeIn);
-      }, 100);
-      // Quita el botón si estaba visible
-      const unlockBtn = document.getElementById('unlockBtn');
-      if (unlockBtn) unlockBtn.style.display = 'none';
-      // Remueve todos los listeners
-      eventos.forEach(ev => document.removeEventListener(ev, unlock));
-    }).catch(() => {});
-  };
-
-  eventos.forEach(ev => document.addEventListener(ev, unlock, { once: true, passive: true }));
+  eventos.forEach(ev =>
+    document.addEventListener(ev, unlock, { passive: true })
+  );
 }
 
 function showUnlockBtn() {
-  // Solo muestra el botón si aún no existe
   if (document.getElementById('unlockBtn')) return;
   const btn = document.createElement('button');
   btn.id = 'unlockBtn';
-  btn.textContent = '🎵 Toca para escuchar la música';
-  btn.style.cssText = `
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #8B2500;
-    color: #F7F0DC;
-    border: 2px solid #C8941A;
-    padding: 12px 24px;
-    font-family: 'Special Elite', monospace;
-    font-size: 13px;
-    letter-spacing: 2px;
-    cursor: pointer;
-    z-index: 9998;
-    border-radius: 4px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    animation: pulse 1.5s ease-in-out infinite;
-  `;
-  btn.onclick = () => {
+  btn.innerHTML = '&#9835; Toca para escuchar la música';
+  btn.style.cssText = [
+    'position:fixed',
+    'bottom:24px',
+    'left:50%',
+    'transform:translateX(-50%)',
+    'background:#8B2500',
+    'color:#F7F0DC',
+    'border:2px solid #C8941A',
+    'padding:13px 22px',
+    'font-family:Special Elite,monospace',
+    'font-size:13px',
+    'letter-spacing:2px',
+    'cursor:pointer',
+    'z-index:9998',
+    'border-radius:4px',
+    'box-shadow:0 4px 20px rgba(0,0,0,.6)',
+    'white-space:nowrap',
+  ].join(';');
+
+  btn.onclick = function() {
+    if (audioUnlocked) { ocultarUnlockBtn(); return; }
+    audio.muted = false;
     audio.volume = 0;
     audio.play().then(() => {
+      audioUnlocked = true;
       setPlay(true);
-      let vol = 0;
-      const fadeIn = setInterval(() => {
-        vol = Math.min(vol + 0.05, 1);
-        audio.volume = vol;
-        if (vol >= 1) clearInterval(fadeIn);
-      }, 100);
-      btn.remove();
+      fadeInVolume();
+      ocultarUnlockBtn();
     }).catch(() => {});
   };
+
   document.body.appendChild(btn);
+
+  // Parpadeo CSS inline
+  let visible = true;
+  setInterval(() => {
+    visible = !visible;
+    btn.style.opacity = visible ? '1' : '0.5';
+  }, 800);
+}
+
+function ocultarUnlockBtn() {
+  const btn = document.getElementById('unlockBtn');
+  if (btn) btn.remove();
 }
 
 window.addEventListener('load', tryAutoplay);
