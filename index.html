@@ -1161,28 +1161,12 @@ function seekAudio(e) {
   audio.currentTime = ((e.clientX - r.left) / r.width) * audio.duration;
 }
 
-/* ── AUTOPLAY: intenta sonar al cargar ── */
 /* ── AUTOPLAY UNIVERSAL iOS + Android ── */
+/* ══ AUDIO UNIVERSAL sin pantalla de bienvenida ══ */
 let audioUnlocked = false;
 
-function tryAutoplay() {
-  audio.load();
-
-  // Intento silencioso inmediato
-  audio.muted = true;
-  audio.play().then(() => {
-    audio.muted = false;
-    audio.volume = 0;
-    setPlay(true);
-    fadeInVolume();
-    audioUnlocked = true;
-  }).catch(() => {
-    audio.muted = false;
-    esperarInteraccion();
-  });
-}
-
 function fadeInVolume() {
+  audio.volume = 0;
   let vol = 0;
   const fade = setInterval(() => {
     vol = Math.min(parseFloat((vol + 0.05).toFixed(2)), 1);
@@ -1191,85 +1175,31 @@ function fadeInVolume() {
   }, 80);
 }
 
-function esperarInteraccion() {
-  showUnlockBtn();
-
-  const eventos = ['touchend', 'touchstart', 'click', 'pointerup'];
-
-  const unlock = (e) => {
-    if (audioUnlocked) return;
-    // iOS: necesita llamarse directo desde el evento del usuario
-    audio.muted = false;
-    audio.volume = 0;
-    const p = audio.play();
-    if (p !== undefined) {
-      p.then(() => {
-        audioUnlocked = true;
-        setPlay(true);
-        fadeInVolume();
-        ocultarUnlockBtn();
-        eventos.forEach(ev => document.removeEventListener(ev, unlock));
-      }).catch(() => {});
-    }
-  };
-
-  eventos.forEach(ev =>
-    document.addEventListener(ev, unlock, { passive: true })
-  );
+function iniciarAudio() {
+  if (audioUnlocked) return;
+  audio.play().then(() => {
+    audioUnlocked = true;
+    setPlay(true);
+    fadeInVolume();
+    ['touchstart','touchend','click'].forEach(ev =>
+      document.removeEventListener(ev, iniciarAudio)
+    );
+  }).catch(() => {});
 }
 
-function showUnlockBtn() {
-  if (document.getElementById('unlockBtn')) return;
-  const btn = document.createElement('button');
-  btn.id = 'unlockBtn';
-  btn.innerHTML = '&#9835; Toca para escuchar la música';
-  btn.style.cssText = [
-    'position:fixed',
-    'bottom:24px',
-    'left:50%',
-    'transform:translateX(-50%)',
-    'background:#8B2500',
-    'color:#F7F0DC',
-    'border:2px solid #C8941A',
-    'padding:13px 22px',
-    'font-family:Special Elite,monospace',
-    'font-size:13px',
-    'letter-spacing:2px',
-    'cursor:pointer',
-    'z-index:9998',
-    'border-radius:4px',
-    'box-shadow:0 4px 20px rgba(0,0,0,.6)',
-    'white-space:nowrap',
-  ].join(';');
-
-  btn.onclick = function() {
-    if (audioUnlocked) { ocultarUnlockBtn(); return; }
-    audio.muted = false;
-    audio.volume = 0;
-    audio.play().then(() => {
-      audioUnlocked = true;
-      setPlay(true);
-      fadeInVolume();
-      ocultarUnlockBtn();
-    }).catch(() => {});
-  };
-
-  document.body.appendChild(btn);
-
-  // Parpadeo CSS inline
-  let visible = true;
-  setInterval(() => {
-    visible = !visible;
-    btn.style.opacity = visible ? '1' : '0.5';
-  }, 800);
-}
-
-function ocultarUnlockBtn() {
-  const btn = document.getElementById('unlockBtn');
-  if (btn) btn.remove();
-}
-
-window.addEventListener('load', tryAutoplay);
+window.addEventListener('load', () => {
+  // Intento inmediato (funciona en Android y algunos navegadores)
+  audio.play().then(() => {
+    audioUnlocked = true;
+    setPlay(true);
+    fadeInVolume();
+  }).catch(() => {
+    // iOS bloqueó — arranca en el primer toque del usuario
+    ['touchstart', 'touchend', 'click'].forEach(ev =>
+      document.addEventListener(ev, iniciarAudio, { passive: true })
+    );
+  });
+});
 
 /* ══ CONTADOR — 6 JUNIO 2026 3:30 PM ══ */
 function tick(){
